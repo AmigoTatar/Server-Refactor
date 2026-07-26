@@ -5,15 +5,20 @@ const {
     getPinnedMessages,
     togglePin,
     editMessage,
-    toggleReaction
+    toggleReaction,
+    searchMessages
 } = require('../controllers/messageController');
 const { authenticateToken } = require('../middleware/auth');
+const { validateSearch } = require('../middleware/validation');
 
 // Все роуты требуют аутентификации
 router.use(authenticateToken);
 
 // Получение сообщений
 router.get('/', getMessages);
+
+// Поиск
+router.get('/search', validateSearch, searchMessages);
 
 // Закрепления
 router.get('/pinned', getPinnedMessages);

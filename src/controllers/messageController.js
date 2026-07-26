@@ -378,11 +378,137 @@ const toggleReaction = async (req, res) => {
         res.status(500).json({ error: 'Не удалось обработать реакцию' });
     }
 };
+// ==============================================
+// ПОИСК СООБЩЕНИЙ
+// ==============================================
+const searchMessages = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { query, chatType } = req.query;
+
+        if (!query || query.length < 2) {
+            return res.status(400).json({ error: 'Поисковый запрос должен содержать минимум 2 символа' });
+        }
+
+        console.log(`🔍 Поиск: userId=${userId}, query="${query}"`);
+
+        // Получаем все чаты, каналы и приватные диалоги пользователя
+        const userChats = await prisma.chatMember.findMany({
+            where: { userId },
+            select: { chatId: true }
+        });
+
+        const userChannels = await prisma.channelMember.findMany({
+            where: { userId },
+            select: { channelId: true }
+        });
+
+        const userPrivateChats = await prisma.privateChatMember.findMany({
+            where: { userId },
+            select: { otherUserId: true }
+        });
+
+        const chatIds = userChats.map(c => c.chatId);
+        const channelIds = userChannels.map(c => c.channelId);
+        const privateUserIds = userPrivateChats.map(c => c.otherUserId);
+
+        let whereClause = {
+            OR: [{ text: { contains: query } }]
+        };
+
+        if (chatType === 'private') {
+            whereClause.AND = [
+                { receiverId: { in: privateUserIds } },
+                { channelId: null },
+                { chatId: null }
+            ];
+        } else if (chatType === 'group') {
+            whereClause.AND = [
+                { chatId: { in: chatIds } },
+                { channelId: null }
+            ];
+        } else if (chatType === 'channel') {
+            whereClause.AND = [
+                { channelId: { in: channelIds } }
+            ];
+        } else {
+            whereClause.AND = [{
+                OR: [
+                    { receiverId: { in: privateUserIds } },
+                    { chatId: { in: chatIds } },
+                    { channelId: { in: channelIds } }
+                ]
+            }];
+        }
+
+        const messages = await prisma.message.findMany({
+            where: whereClause,
+            include: {
+                sender: {
+                    select: { id: true, username: true, avatar: true }
+                },
+                chat: {
+                    select: { id: true, name: true, avatar: true }
+                },
+                channel: {
+                    select: { id: true, name: true, avatar: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+
+        const formattedMessages = messages.map(msg => {
+            let chatName = '';
+            let chatType = '';
+            let chatId = '';
+
+            if (msg.chat) {
+                chatName = msg.chat.name;
+                chatType = 'group';
+                chatId = 'chat_' + msg.chat.id;
+            } else if (msg.channel) {
+                chatName = msg.channel.name;
+                chatType = 'channel';
+                chatId = 'channel_' + msg.channel.id;
+            } else if (msg.receiverId) {
+                const isOwn = msg.senderId === userId;
+                chatName = isOwn ? 'Вы' : 'Собеседник';
+                chatType = 'private';
+                chatId = 'user_' + (isOwn ? msg.receiverId : msg.senderId);
+            }
+
+            return {
+                id: msg.id,
+                text: msg.text,
+                mediaUrl: msg.mediaUrl,
+                mediaType: msg.mediaType,
+                createdAt: msg.createdAt,
+                chatName: chatName,
+                chatType: chatType,
+                chatId: chatId,
+                sender: msg.sender,
+                isPinned: msg.isPinned || false,
+                edited: msg.edited || false
+            };
+        });
+
+        res.json({
+            results: formattedMessages,
+            total: formattedMessages.length,
+            query: query
+        });
+    } catch (error) {
+        console.error('❌ Ошибка поиска:', error);
+        res.status(500).json({ error: 'Не удалось выполнить поиск' });
+    }
+};
 
 module.exports = {
     getMessages,
     getPinnedMessages,
     togglePin,
     editMessage,
-    toggleReaction
+    toggleReaction,
+    searchMessages
 };

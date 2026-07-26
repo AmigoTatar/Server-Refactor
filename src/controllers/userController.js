@@ -92,14 +92,13 @@ const updateProfile = async (req, res) => {
             }
         });
 
-        // ✅ ОТПРАВЛЯЕМ СОБЫТИЕ
+        // ✅ Отправляем событие всем подключённым клиентам
         const io = req.app.get('io');
         io.emit('user_updated', {
-            userId: userId,
+            userId: updatedUser.id,
             username: updatedUser.username,
             avatar: updatedUser.avatar
         });
-        console.log(`👤 Профиль пользователя ${userId} обновлён, событие отправлено`);
 
         res.json({
             success: true,
@@ -135,14 +134,13 @@ const updateAvatar = async (req, res) => {
             }
         });
 
-        // ✅ ОТПРАВЛЯЕМ СОБЫТИЕ
+        // ✅ Отправляем событие всем подключённым клиентам
         const io = req.app.get('io');
         io.emit('user_updated', {
-            userId: userId,
+            userId: updatedUser.id,
             username: updatedUser.username,
             avatar: updatedUser.avatar
         });
-        console.log(`🖼️ Аватар пользователя ${userId} обновлён, событие отправлено`);
 
         res.json({
             success: true,
